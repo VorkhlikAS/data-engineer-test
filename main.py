@@ -1,6 +1,7 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, desc, row_number
 from pyspark.sql.window import Window
+from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType, DateType
 import argparse
 import os
 
@@ -35,15 +36,40 @@ def main() -> None:
 
 
 def process(customers_dir: str, products_dir: str, orders_dir: str, result_dir: str) -> None:
+    customer_schema = StructType([
+        StructField("customerID", IntegerType(), True),
+        StructField("customer_name", StringType(), True),
+        StructField("email", StringType(), True),
+        StructField("joinDate", DateType(), True),
+        StructField("status", StringType(), True)
+    ])
+
+    product_schema = StructType([
+        StructField("productID", IntegerType(), True),
+        StructField("product_name", StringType(), True),
+        StructField("price", DoubleType(), True),
+        StructField("numberOfProducts", IntegerType(), True)
+    ])
+
+    order_schema = StructType([
+        StructField("customerID", IntegerType(), True),
+        StructField("orderID", IntegerType(), True),
+        StructField("productID", IntegerType(), True),
+        StructField("numberOfProduct", IntegerType(), True),
+        StructField("orderDate", DateType(), True),
+        StructField("status", StringType(), True)
+    ])
+    
     spark = SparkSession.builder.appName("PopularProductAnalysis").getOrCreate()
 
-    customer_df = spark.read.option("delimiter", "\t").csv(customers_dir, header=False, inferSchema=True) \
-                        .toDF("customerID", "customer_name", "email", "joinDate", "status")
-    product_df = spark.read.option("delimiter", "\t").csv(products_dir, header=False, inferSchema=True) \
-                        .toDF("productID", "product_name", "price", "numberOfProducts")
-    order_df = spark.read.option("delimiter", "\t").csv(orders_dir, header=False, inferSchema=True) \
-                        .toDF("customerID", "orderID", "productID", "numberOfProduct", "orderDate", "status")
-    # print(customer_df.show(), product_df.show(), order_df.show())
+    try: 
+        customer_df = spark.read.option("delimiter", "\t").csv(customers_dir, header=False, schema=customer_schema)
+        product_df = spark.read.option("delimiter", "\t").csv(products_dir, header=False, schema=product_schema)
+        order_df = spark.read.option("delimiter", "\t").csv(orders_dir, header=False, schema=order_schema)
+    except Exception as e:
+        print(f"Error: incorrect file structure\n{e}")
+        spark.stop()
+        exit(1)
 
     # filter only relevant values
     active_customer_df = customer_df.filter(col("status") == "active")
