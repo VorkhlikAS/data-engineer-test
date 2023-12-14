@@ -8,7 +8,33 @@ DEFAULT_DATA_DIR = "./data"
 DEFAULT_RESULT_DIR = "./"
 
 
-def main(customers_dir: str, products_dir: str, orders_dir: str, result_dir: str) -> None:
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Popular Products with PySpark")
+    parser.add_argument("--data_dir", type=str, help="Path to the directory containing customers, products and orders files", default=DEFAULT_DATA_DIR)
+    parser.add_argument("--result_dir", type=str, help="Path to the result directory", default=DEFAULT_RESULT_DIR)
+    args = parser.parse_args()
+
+    if not os.path.exists(args.data_dir):
+        print(f"Error: Directory '{args.data_dir}' does not exist.")
+        exit(1)
+    elif not os.path.exists(args.result_dir):
+        print(f"Error: Directory '{args.data_dir}' does not exist.")
+        exit(1)
+
+    # Update file paths
+    customer_path = os.path.join(args.data_dir, "Customer.csv")
+    product_path = os.path.join(args.data_dir, "Product.csv")
+    order_path = os.path.join(args.data_dir, "Order.csv")
+
+    # Check if the specified files exist
+    for file_path in [customer_path, product_path, order_path]:
+        if not os.path.exists(file_path):
+            print(f"Error: File '{file_path}' does not exist.")
+            exit(1)
+    process(customer_path, product_path, order_path, args.result_dir)
+
+
+def process(customers_dir: str, products_dir: str, orders_dir: str, result_dir: str) -> None:
     spark = SparkSession.builder.appName("PopularProductAnalysis").getOrCreate()
 
     customer_df = spark.read.option("delimiter", "\t").csv(customers_dir, header=False, inferSchema=True) \
@@ -39,27 +65,5 @@ def main(customers_dir: str, products_dir: str, orders_dir: str, result_dir: str
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Popular Products with PySpark")
-    parser.add_argument("--data_dir", type=str, help="Path to the directory containing customers, products and orders files", default=DEFAULT_DATA_DIR)
-    parser.add_argument("--result_dir", type=str, help="Path to the result directory", default=DEFAULT_RESULT_DIR)
-    args = parser.parse_args()
-
-    if not os.path.exists(args.data_dir):
-        print(f"Error: Directory '{args.data_dir}' does not exist.")
-        exit(1)
-    elif not os.path.exists(args.result_dir):
-        print(f"Error: Directory '{args.data_dir}' does not exist.")
-        exit(1)
-
-    # Update file paths
-    customer_path = os.path.join(args.data_dir, "Customer.csv")
-    product_path = os.path.join(args.data_dir, "Product.csv")
-    order_path = os.path.join(args.data_dir, "Order.csv")
-
-    # Check if the specified files exist
-    for file_path in [customer_path, product_path, order_path]:
-        if not os.path.exists(file_path):
-            print(f"Error: File '{file_path}' does not exist.")
-            exit(1)
-    main(customer_path, product_path, order_path, args.result_dir)
+    main()
     
