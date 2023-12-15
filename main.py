@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, desc, row_number
+from pyspark.sql.functions import col, desc, dense_rank
 from pyspark.sql.window import Window
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType, DateType
 import argparse
@@ -78,13 +78,17 @@ def process(customers_dir: str, products_dir: str, orders_dir: str, result_dir: 
     joined_df = delivered_order_df.join(active_customer_df, "customerID", "inner") \
                                 .join(product_df, "productID", "inner")
 
-    window_spec = Window.partitionBy("customerID").orderBy(desc("numberOfProduct"))
-    ranked_df = joined_df.withColumn("rank", row_number().over(window_spec))
+    window_spec = Window.partitionBy("customerID").orderBy(desc("count"))
+    ranked_df = joined_df.groupBy("customerID", "productID", "product_name", "customer_name").count() \
+                        .withColumn("rank", dense_rank().over(window_spec))
 
+    # print(ranked_df.show())
+
+    result_path = os.path.join(result_dir, 'result.csv')
+    
     most_popular_products = ranked_df.filter(col("rank") == 1) \
                                     .select("customer_name", "product_name")
 
-    result_path = os.path.join(result_dir, 'result.csv')
     most_popular_products.write.mode("overwrite").csv(result_path, header=True)
 
     spark.stop()
