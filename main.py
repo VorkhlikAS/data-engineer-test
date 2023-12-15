@@ -88,8 +88,16 @@ def process(customers_dir: str, products_dir: str, orders_dir: str, result_dir: 
     
     most_popular_products = ranked_df.filter(col("rank") == 1) \
                                     .select("customer_name", "product_name")
+                                    
+    joined_prices_df = most_popular_products.join(product_df, ["product_name"], "inner")
 
-    most_popular_products.write.mode("overwrite").csv(result_path, header=True)
+    window_spec_prices = Window.partitionBy("customer_name").orderBy(desc("price"))
+    result_df = joined_prices_df.withColumn("dense_rank", dense_rank().over(window_spec_prices)) \
+                                .filter(col("dense_rank") == 1) \
+                                .select("customer_name", "product_name")
+
+    # print(result_df.show())
+    result_df.write.mode("overwrite").csv(result_path, header=True)
 
     spark.stop()
 
