@@ -47,8 +47,8 @@ def process(customers_dir: str, products_dir: str, orders_dir: str, result_dir: 
     product_schema = StructType([
         StructField("productID", IntegerType(), True),
         StructField("product_name", StringType(), True),
-        StructField("price", DoubleType(), True),
-        StructField("numberOfProducts", IntegerType(), True)
+        StructField("price", IntegerType(), True),
+        StructField("numberOfProductsRemaining", IntegerType(), True)
     ])
 
     order_schema = StructType([
@@ -75,28 +75,26 @@ def process(customers_dir: str, products_dir: str, orders_dir: str, result_dir: 
     active_customer_df = customer_df.filter(col("status") == "active")
     delivered_order_df = order_df.filter(col("status") == "delivered")
 
-    joined_df = delivered_order_df.join(active_customer_df, "customerID", "inner") \
-                                .join(product_df, "productID", "inner")
-
-    window_spec = Window.partitionBy("customerID").orderBy(desc("count"))
-    ranked_df = joined_df.groupBy("customerID", "productID", "product_name", "customer_name").count() \
-                        .withColumn("rank", dense_rank().over(window_spec))
-
-    # print(ranked_df.show())
+    joined_df = active_customer_df.join(delivered_order_df, "customerID", "inner") \
+        .join(product_df, "ProductID", "inner")
+    
+    joined_df = joined_df.withColumn("total_cost", joined_df.price * joined_df.numberOfProduct)
+    # joined_df = joined_df.withColumn("total_cost", col("total_cost").cast(IntegerType()))
+    
+    
+    popular_products = joined_df.groupBy("customerID", "productID", "customer_name", "product_name") \
+        .sum("total_cost") \
+        .withColumnRenamed("sum(total_cost)", "total_cost")
+    
+    # print(popular_products.show())
+    windowSpec = Window.partitionBy("customerID").orderBy(desc("total_cost"))
+    result_df = popular_products.withColumn("dense_rank", dense_rank().over(windowSpec)) \
+                                    .filter(col("dense_rank") == 1) \
+                                    .select("customer_name", "product_name")
+    # print(result_df.show())
 
     result_path = os.path.join(result_dir, 'result.csv')
     
-    most_popular_products = ranked_df.filter(col("rank") == 1) \
-                                    .select("customer_name", "product_name")
-                                    
-    joined_prices_df = most_popular_products.join(product_df, ["product_name"], "inner")
-
-    window_spec_prices = Window.partitionBy("customer_name").orderBy(desc("price"))
-    result_df = joined_prices_df.withColumn("dense_rank", dense_rank().over(window_spec_prices)) \
-                                .filter(col("dense_rank") == 1) \
-                                .select("customer_name", "product_name")
-
-    # print(result_df.show())
     result_df.write.mode("overwrite").csv(result_path, header=True)
 
     spark.stop()
