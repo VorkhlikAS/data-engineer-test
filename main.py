@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, desc, dense_rank
+from pyspark.sql.functions import col, desc, rank, dense_rank
 from pyspark.sql.window import Window
 from pyspark.sql.types import StructType, StructField, IntegerType, StringType, DoubleType, DateType
 import argparse
@@ -78,17 +78,14 @@ def process(customers_dir: str, products_dir: str, orders_dir: str, result_dir: 
     joined_df = active_customer_df.join(delivered_order_df, "customerID", "inner") \
         .join(product_df, "ProductID", "inner")
     
-    joined_df = joined_df.withColumn("total_cost", joined_df.price * joined_df.numberOfProduct)
+    # joined_df = joined_df.withColumn("total_cost", joined_df.price * joined_df.numberOfProduct)
     # joined_df = joined_df.withColumn("total_cost", col("total_cost").cast(IntegerType()))
+    joined_df = joined_df.groupBy("customerID", "productID", "customer_name", "product_name", "price") \
+        .sum("numberOfProduct") \
+        .withColumnRenamed("sum(numberOfProduct)", "numberOfProduct")
     
-    
-    popular_products = joined_df.groupBy("customerID", "productID", "customer_name", "product_name") \
-        .sum("total_cost") \
-        .withColumnRenamed("sum(total_cost)", "total_cost")
-    
-    # print(popular_products.show())
-    windowSpec = Window.partitionBy("customerID").orderBy(desc("total_cost"))
-    result_df = popular_products.withColumn("dense_rank", dense_rank().over(windowSpec)) \
+    windowSpec = Window.partitionBy("customerID").orderBy(desc("numberOfProduct"), desc("price"))
+    result_df = joined_df.withColumn("dense_rank", dense_rank().over(windowSpec)) \
                                     .filter(col("dense_rank") == 1) \
                                     .select("customer_name", "product_name")
     # print(result_df.show())
